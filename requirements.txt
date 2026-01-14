@@ -1,0 +1,4 @@
+curl-cffi>=0.5.10
+eth-account>=0.8.0
+pytz>=2023.3
+colorama>=0.4.6

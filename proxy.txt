@@ -1,0 +1,12 @@
+# Add your proxies here (one per line)
+# Supported formats:
+# http://username:password@ip:port
+# https://username:password@ip:port
+# socks5://username:password@ip:port
+
+# Examples:
+# http://user123:pass456@192.168.1.1:8080
+# socks5://proxyuser:proxypass@10.0.0.1:1080
+
+# Rename this file to proxy.txt and add your proxies
+# Leave empty or delete if not using proxies
