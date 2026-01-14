@@ -187,6 +187,37 @@ Issued At: {issued_at}"""
         except Exception as e:
             self.log(f"Error Claiming: {e}", "ERROR")
 
+    def check_account_info(self):
+        website_id = "d2c97001-a40d-45b6-b69c-11927e144773"
+        organization_id = "3cf0dde2-04c0-424a-a603-13fcf79e440e"
+        url = f"https://hub.veerarewards.com/api/loyalty/accounts?limit=100&websiteId={website_id}&organizationId={organization_id}&walletAddress={self.address}"
+        
+        try:
+            resp = self.session.get(url, headers=self.get_headers())
+            if resp.status_code == 200:
+                data = resp.json()
+                if "data" in data and len(data["data"]) > 0:
+                    account_data = data["data"][0]
+                    amount = account_data.get("amount", "0")
+                    
+                    twitter_user = "N/A"
+                    discord_user = "N/A"
+                    
+                    user_info = account_data.get("user", {})
+                    metadata = user_info.get("userMetadata", [])
+                    
+                    if metadata and len(metadata) > 0:
+                        twitter_user = metadata[0].get("twitterUser", "N/A")
+                        discord_user = metadata[0].get("discordUser", "N/A")
+                    
+                    self.log(f"Points: {amount} | Twitter: {twitter_user} | Discord: {discord_user}", "SUCCESS")
+                else:
+                    self.log("Account info not found", "WARNING")
+            else:
+                self.log(f"Failed to check info: {resp.status_code}", "ERROR")
+        except Exception as e:
+            self.log(f"Error Checking Info: {e}", "ERROR")
+
     def random_delay(self):
         delay = random.randint(2, 5)
         time.sleep(delay)
@@ -233,6 +264,9 @@ Issued At: {issued_at}"""
             for mission in missions:
                 self.random_delay()
                 self.complete_mission(mission["id"], mission["name"])
+            
+            self.random_delay()
+            self.check_account_info()
             
             return True
         return False
