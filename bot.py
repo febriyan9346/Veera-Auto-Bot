@@ -73,9 +73,9 @@ class VeeraBot:
             "accept": "*/*",
             "accept-language": "en-US,en;q=0.9",
             "origin": "https://hub.veerarewards.com",
-            "referer": "https://hub.veerarewards.com/loyalty",
+            "referer": "https://hub.veerarewards.com/",
             "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            "sec-ch-ua": '"Google Chrome";v="124", "Chromium";v="124", "Not-A.Brand";v="99"',
+            "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"Windows"',
             "sec-fetch-dest": "empty",
@@ -88,7 +88,8 @@ class VeeraBot:
         try:
             resp = self.session.get(url, headers=self.get_headers())
             if resp.status_code == 200:
-                return resp.json().get("csrfToken")
+                csrf = resp.json().get("csrfToken")
+                return csrf
             return None
         except Exception as e:
             self.log(f"Error CSRF: {e}", "ERROR")
@@ -96,9 +97,12 @@ class VeeraBot:
 
     def login(self):
         csrf_token = self.get_csrf()
-        if not csrf_token: return False
+        if not csrf_token:
+            return False
 
-        issued_at = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+        time.sleep(1)
+
+        issued_at = datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
         
         siwe_message = f"""hub.veerarewards.com wants you to sign in with your Ethereum account:
 {self.address}
@@ -113,6 +117,8 @@ Issued At: {issued_at}"""
 
         signed_msg = self.account.sign_message(encode_defunct(text=siwe_message))
         signature = signed_msg.signature.hex()
+        if signature.startswith('0x'):
+            signature = signature[2:]
 
         message_json = {
             "domain": "hub.veerarewards.com",
@@ -126,30 +132,33 @@ Issued At: {issued_at}"""
         }
 
         url = "https://hub.veerarewards.com/api/auth/callback/credentials"
+        
         headers = self.get_headers()
         headers["content-type"] = "application/x-www-form-urlencoded"
 
-        payload = {
-            "message": json.dumps(message_json, separators=(',', ':')),
-            "accessToken": signature,
-            "signature": signature,
-            "walletConnectorName": "MetaMask",
-            "walletAddress": self.address,
-            "redirect": "false",
-            "callbackUrl": "/protected",
-            "chainType": "evm",
-            "walletProvider": "undefined",
-            "csrfToken": csrf_token,
-            "json": "true"
-        }
+        payload_parts = []
+        payload_parts.append(f"message={requests.utils.quote(json.dumps(message_json, separators=(',', ':')))}")
+        payload_parts.append(f"signature=0x{signature}")
+        payload_parts.append(f"csrfToken={requests.utils.quote(csrf_token)}")
+        payload_parts.append("json=true")
+        
+        payload_str = "&".join(payload_parts)
 
         try:
-            resp = self.session.post(url, headers=headers, data=payload)
+            resp = self.session.post(url, headers=headers, data=payload_str, allow_redirects=False)
+            
             if resp.status_code == 200:
+                res_json = resp.json()
+                
+                if "url" in res_json:
+                    if "error" in res_json["url"]:
+                        self.log(f"Login Failed: Invalid signature or account not registered", "ERROR")
+                        return False
+                
                 self.log("Login successful!", "SUCCESS")
                 return True
             else:
-                self.log(f"Login Failed: {resp.text}", "ERROR")
+                self.log(f"Login Failed: {resp.status_code}", "ERROR")
                 return False
         except Exception as e:
             self.log(f"Login Error: {e}", "ERROR")
@@ -232,7 +241,8 @@ def load_file(filename):
     try:
         with open(filename, 'r') as f:
             return [line.strip() for line in f if line.strip()]
-    except: return []
+    except:
+        return []
 
 if __name__ == "__main__":
     bot_instance = VeeraBot.__new__(VeeraBot)
